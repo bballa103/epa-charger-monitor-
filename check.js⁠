@@ -1,0 +1,33 @@
+const { chromium } = require('playwright');
+
+const NTFY_TOPIC = 'epa-rtp-charger-63737';
+const STATION_URL = 'https://driver.chargepoint.com/stations/3075301';
+
+(async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+
+  console.log('Loading ChargePoint station 3075301...');
+  await page.goto(STATION_URL, { waitUntil: 'networkidle', timeout: 60000 });
+  await page.waitForTimeout(6000); // Allow React port pills to finish rendering
+
+  const bodyText = await page.innerText('body');
+  console.log('Extracted status text:', bodyText);
+
+  if (bodyText.includes('Available')) {
+    console.log('Port Available! Sending push notification...');
+    await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
+      method: 'POST',
+      body: 'EPA-RTP N. Surface Lot charger has an AVAILABLE port!',
+      headers: {
+        'Title': 'EPA Charger Available!',
+        'Priority': 'high',
+        'Tags': 'electric_plug,car'
+      }
+    });
+  } else {
+    console.log('Both ports are currently In Use.');
+  }
+
+  await browser.close();
+})();
