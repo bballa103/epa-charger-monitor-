@@ -7,18 +7,20 @@ on:
 
 jobs:
   check_charger:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install Playwright Chromium
         run: npm init -y && npm install playwright && npx playwright install --with-deps chromium
 
       - name: Check ChargePoint Station
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: node check.js
