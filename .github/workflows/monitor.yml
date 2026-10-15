@@ -7,22 +7,62 @@ on:
 
 jobs:
   check_charger:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install Playwright Chromium
+      - name: Install Playwright
         run: |
-          npm install --no-save playwright
+          mkdir -p /tmp/checker
+          cd /tmp/checker
+          npm init -y
+          npm install playwright
           npx playwright install --with-deps chromium
 
       - name: Check ChargePoint Station
         env:
           EVENT_NAME: ${{ github.event_name }}
-        run: node check.js
+        run: |
+          cd /tmp/checker
+          cat << 'EOF' > run_check.js
+          const { chromium } = require('playwright');
+          const NTFY_TOPIC = 'epa-rtp-charger-63737';
+          const STATION_URL = 'https://driver.chargepoint.com/stations/3075301';
+
+          async function notify(title, message, priority = 'default', tags = 'electric_plug') {
+            await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
+              method: 'POST',
+              body: message,
+              headers: { 'Title': title, 'Priority': priority, 'Tags': tags }
+            });
+          }
+
+          (async () => {
+            let browser;
+            try {
+              browser = await chromium.launch({ headless: true });
+              const context = await browser.newContext({
+                userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+              });
+              const page = await context.newPage();
+              await page.goto(STATION_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
+              await page.waitForTimeout(10000);
+
+              const bodyText = await page.evaluate(() => document.body ? document.body.innerText : '');
+              console.log('Extracted status text:\n', bodyText);
+
+              if (bodyText.includes('Available')) {
+                await notify('EPA Charger Available!', 'EPA-RTP N. Surface Lot charger has an AVAILABLE port!', 'high', 'electric_plug,car');
+              } else if (process.env.EVENT_NAME === 'workflow_dispatch') {
+                const statusCount = (bodyText.match(/In Use/g) || []).length;
+                await notify('Charger Monitor Working!', `Connected! Found ${statusCount} port(s) currently In Use.`, 'default', 'white_check_mark');
+              }
+            } catch (err) {
+              console.error(err);
+              if (process.env.EVENT_NAME === 'workflow_dispatch') {
+                await notify('Charger Monitor Error', err.message.slice(0, 150), 'default', 'warning');
+              }
+            } finally {
+              if (browser) await browser.close();
+            }
+          })();
+          EOF
+          node run_check.js
