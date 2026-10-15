@@ -8,11 +8,13 @@ const STATION_URL = 'https://driver.chargepoint.com/stations/3075301';
   const page = await browser.newPage();
 
   console.log('Loading ChargePoint station 3075301...');
-  await page.goto(STATION_URL, { waitUntil: 'networkidle', timeout: 60000 });
-  await page.waitForTimeout(6000); // Allow React port pills to finish rendering
+  await page.goto(STATION_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  
+  // Wait 10 seconds for ChargePoint's live port statuses to populate on screen
+  await page.waitForTimeout(10000);
 
   const bodyText = await page.innerText('body');
-  console.log('Extracted status text:', bodyText);
+  console.log('Extracted status text:\n', bodyText);
 
   if (bodyText.includes('Available')) {
     console.log('Port Available! Sending push notification...');
@@ -23,6 +25,17 @@ const STATION_URL = 'https://driver.chargepoint.com/stations/3075301';
         'Title': 'EPA Charger Available!',
         'Priority': 'high',
         'Tags': 'electric_plug,car'
+      }
+    });
+  } else if (process.env.EVENT_NAME === 'workflow_dispatch') {
+    console.log('Manual test run: Both ports In Use, sending test confirmation to iPhone...');
+    await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
+      method: 'POST',
+      body: 'GitHub Monitor is working! Both EPA-RTP ports are currently In Use.',
+      headers: {
+        'Title': 'Charger Monitor Connected',
+        'Priority': 'default',
+        'Tags': 'white_check_mark'
       }
     });
   } else {
