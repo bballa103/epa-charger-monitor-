@@ -10,15 +10,17 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
 
       - name: Install Playwright Chromium
-        run: npm init -y && npm install playwright && npx playwright install --with-deps chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
 
       - name: Check ChargePoint Station
         env:
